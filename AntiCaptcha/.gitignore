@@ -1,5 +1,1 @@
-*.userlibraries
-*.class
-*.html
-/.idea/
-/target/
+/bin/
