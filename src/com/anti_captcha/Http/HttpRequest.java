@@ -8,198 +8,200 @@ import java.util.Map;
 import java.util.Set;
 
 public class HttpRequest {
-    private String url;
-    private String postRaw;
-    private Integer timeout = 60_000; // milliseconds
-    private Integer maxBodySize = 0; // 0 = unlimited, in bytes
-    private boolean followRedirects = true; // does not work now due to moving from JSOUP to ApacheHttpClient
-    private boolean validateTLSCertificates = false;
-    private Map<String, String> proxy = null; //new HashMap<String, String>() {{put("host", "192.168.0.168"); put("port", "8888");}};
-    private Map<String, String> cookies = new HashMap<>();
-    private Map<String, String> headers = new HashMap<String, String>()
-    {/**
-		 * 
+	private String url;
+	private String postRaw;
+	private Integer timeout = 60_000; // milliseconds
+	private Integer maxBodySize = 0; // 0 = unlimited, in bytes
+	private boolean followRedirects = true; // does not work now due to moving
+											 // from JSOUP to ApacheHttpClient
+	private boolean validateTLSCertificates = false;
+	private Map<String, String> proxy = null; // new HashMap<String, String>()
+												 // {{put("host",
+												 // "192.168.0.168");
+												 // put("port", "8888");}};
+	private Map<String, String> cookies = new HashMap<>();
+	private Map<String, String> headers = new HashMap<String, String>() {
+		/**
+		 *
 		 */
 		private static final long serialVersionUID = -3008149882133739333L;
 
-	{
-        put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-        put("Accept-Encoding", "gzip, deflate, sdch");
-        put("Accept-Language", "ru-RU,en;q=0.8,ru;q=0.6");
-    }};
+		{
+			put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+			put("Accept-Encoding", "gzip, deflate, sdch");
+			put("Accept-Language", "ru-RU,en;q=0.8,ru;q=0.6");
+		}
+	};
 
-    private boolean noCache = false;
-    private Set<Integer> acceptedHttpCodes = new HashSet<Integer>() {/**
-		 * 
-		 */
+	private boolean noCache = false;
+	private Set<Integer> acceptedHttpCodes = new HashSet<Integer>() {
+		/**
+		*
+		*/
 		private static final long serialVersionUID = 2745817636081220449L;
 
-	{
-        add(200);
-    }};
-    
-    private String[] urlChangingParts = {
-            "session_id",
-            "sessionid",
-            "timestamp",
-    };
+		{
+			add(200);
+		}
+	};
 
-    public HttpRequest(String url) {
-        this.url = url;
-    }
+	private String[] urlChangingParts = { "session_id", "sessionid", "timestamp",
+	};
 
-    public boolean isValidateTLSCertificates() {
-        return validateTLSCertificates;
-    }
+	public HttpRequest(String url) {
+		this.url = url;
+	}
 
-    public String getUrl() {
-        return url;
-    }
+	public void addAcceptedHttpCode(Integer httpCode) {
+		acceptedHttpCodes.add(httpCode);
+	}
 
-    public String getRawPost() {
-        return postRaw;
-    }
+	public void addCookie(String key, String value) {
+		cookies.put(key, value);
+	}
 
-    public Map<String, String> getProxy() {
-        return proxy;
-    }
+	public void addHeader(String key, String value) {
+		headers.put(key, value);
+	}
 
-    public Integer getTimeout() {
-        return timeout;
-    }
+	public void addToPost(String key, String value) throws UnsupportedEncodingException {
+		if (postRaw == null) {
+			postRaw = "";
+		} else {
+			postRaw += "&";
+		}
 
-    public String getReferer() {
+		postRaw += URLEncoder.encode(key, "UTF-8") + "=" + URLEncoder.encode(value, "UTF-8");
+		addHeader("Content-Type", "application/x-www-form-urlencoded");
+	}
 
-        if (headers.get("Referer") != null) {
-            return headers.get("Referer");
-        }
+	public Set<Integer> getAcceptedHttpCodes() {
+		return acceptedHttpCodes;
+	}
 
-        return null;
-    }
+	public Map<String, String> getCookies() {
+		return cookies;
+	}
 
-    public Map<String, String> getHeaders() {
-        return headers;
-    }
+	public Map<String, String> getHeaders() {
+		return headers;
+	}
 
-    public Map<String, String> getCookies() {
-        return cookies;
-    }
+	public Integer getMaxBodySize() {
+		return maxBodySize;
+	}
 
-    public Set<Integer> getAcceptedHttpCodes() {
-        return acceptedHttpCodes;
-    }
+	public Map<String, String> getProxy() {
+		return proxy;
+	}
 
-    public boolean isNoCache() {
-        return noCache;
-    }
+	public String getRawPost() {
+		return postRaw;
+	}
 
-    public void setNoCache(boolean noCache) {
-        this.noCache = noCache;
-    }
+	public String getReferer() {
 
-    public boolean isFollowRedirects() {
-        return followRedirects;
-    }
+		if (headers.get("Referer") != null)
+			return headers.get("Referer");
 
-    public Integer getMaxBodySize() {
-        return maxBodySize;
-    }
+		return null;
+	}
 
-    public String getUrlWithoutChangingParts(String url) throws Exception {
+	public Integer getTimeout() {
+		return timeout;
+	}
 
-        String newUrl = url = url.toLowerCase();
+	public String getUrl() {
+		return url;
+	}
 
-        for (String partToRemove : urlChangingParts) {
+	public String getUrlWithoutChangingParts(String url) throws Exception {
 
-            String[] splitted = newUrl.split(partToRemove);
+		String newUrl = url = url.toLowerCase();
 
-            if (splitted.length == 1) {
-                continue;
-            }
+		for (String partToRemove : urlChangingParts) {
 
-            String firstPiece = splitted[0];
-            String secondPiece = splitted[1];
+			String[] splitted = newUrl.split(partToRemove);
 
-            if (splitted.length > 2) {
+			if (splitted.length == 1) {
+				continue;
+			}
 
-                String[] splitted2 = new String[splitted.length - 1];
-                System.arraycopy(splitted, 1, splitted2, 0, splitted2.length);
+			String firstPiece = splitted[0];
+			String secondPiece = splitted[1];
 
-                secondPiece = String.join(partToRemove, splitted2);
-            }
+			if (splitted.length > 2) {
 
-            Integer breakpointPos = secondPiece.length();
+				String[] splitted2 = new String[splitted.length - 1];
+				System.arraycopy(splitted, 1, splitted2, 0, splitted2.length);
 
-            if (secondPiece.contains("?")) {
-                breakpointPos = secondPiece.indexOf("?");
-            } else if (secondPiece.contains("&")) {
-                breakpointPos = secondPiece.indexOf("&");
-            }
+				secondPiece = String.join(partToRemove, splitted2);
+			}
 
-            newUrl = firstPiece + secondPiece.substring(breakpointPos);
-        }
+			Integer breakpointPos = secondPiece.length();
 
-        if (newUrl.equals(url)) {
-            return newUrl;
-        } else {
-            return getUrlWithoutChangingParts(newUrl);
-        }
-    }
+			if (secondPiece.contains("?")) {
+				breakpointPos = secondPiece.indexOf("?");
+			} else if (secondPiece.contains("&")) {
+				breakpointPos = secondPiece.indexOf("&");
+			}
 
-    public void setRawPost(String post) {
-        this.postRaw = post;
-    }
+			newUrl = firstPiece + secondPiece.substring(breakpointPos);
+		}
 
-    public void addToPost(String key, String value) throws UnsupportedEncodingException {
-        if (postRaw == null) {
-            postRaw = "";
-        } else {
-            postRaw += "&";
-        }
+		if (newUrl.equals(url))
+			return newUrl;
+		else
+			return getUrlWithoutChangingParts(newUrl);
+	}
 
-        postRaw += URLEncoder.encode(key, "UTF-8") + "=" + URLEncoder.encode(value, "UTF-8");
-        addHeader("Content-Type", "application/x-www-form-urlencoded");
-    }
+	public boolean isFollowRedirects() {
+		return followRedirects;
+	}
 
-    public void setTimeout(Integer timeout) {
-        this.timeout = timeout;
-    }
+	public boolean isNoCache() {
+		return noCache;
+	}
 
-    public void setMaxBodySize(Integer maxBodySize) {
-        this.maxBodySize = maxBodySize;
-    }
+	public boolean isValidateTLSCertificates() {
+		return validateTLSCertificates;
+	}
 
-    public void setReferer(String referer) {
-        headers.put("Referer", referer);
-    }
+	public void setCookies(Map<String, String> cookies) {
+		this.cookies = cookies;
+	}
 
-    public void setFollowRedirects(boolean followRedirects) {
-        this.followRedirects = followRedirects;
-    }
+	public void setFollowRedirects(boolean followRedirects) {
+		this.followRedirects = followRedirects;
+	}
 
-    public void setValidateTLSCertificates(boolean validateTLSCertificates) {
-        this.validateTLSCertificates = validateTLSCertificates;
-    }
+	public void setMaxBodySize(Integer maxBodySize) {
+		this.maxBodySize = maxBodySize;
+	}
 
-    public void setProxy(String proxyHost, Integer proxyPort) {
-        this.proxy = new HashMap<>();
-        this.proxy.put("host", proxyHost);
-        this.proxy.put("port", String.valueOf(proxyPort));
-    }
+	public void setNoCache(boolean noCache) {
+		this.noCache = noCache;
+	}
 
-    public void setCookies(Map<String, String> cookies) {
-        this.cookies = cookies;
-    }
+	public void setProxy(String proxyHost, Integer proxyPort) {
+		proxy = new HashMap<>();
+		proxy.put("host", proxyHost);
+		proxy.put("port", String.valueOf(proxyPort));
+	}
 
-    public void addCookie(String key, String value) {
-        cookies.put(key, value);
-    }
+	public void setRawPost(String post) {
+		postRaw = post;
+	}
 
-    public void addAcceptedHttpCode(Integer httpCode) {
-        acceptedHttpCodes.add(httpCode);
-    }
+	public void setReferer(String referer) {
+		headers.put("Referer", referer);
+	}
 
-    public void addHeader(String key, String value) {
-        this.headers.put(key, value);
-    }
+	public void setTimeout(Integer timeout) {
+		this.timeout = timeout;
+	}
+
+	public void setValidateTLSCertificates(boolean validateTLSCertificates) {
+		this.validateTLSCertificates = validateTLSCertificates;
+	}
 }

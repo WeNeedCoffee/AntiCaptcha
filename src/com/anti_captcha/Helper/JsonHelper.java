@@ -1,101 +1,97 @@
 package com.anti_captcha.Helper;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.text.NumberFormat;
 import java.text.ParseException;
 import java.util.Locale;
-
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class JsonHelper {
-    public static String extractStr(JSONObject json, String fieldName) {
-        return extractStr(json, fieldName, null, false);
-    }
+	public static String asString(JSONObject json) {
+		try {
+			return json.toString(4);
+		} catch (JSONException e) {
+			e.printStackTrace();
 
-    public static String extractStr(JSONObject json, String fieldName, Boolean silent) {
-        return extractStr(json, fieldName, null, silent);
-    }
+			return null;
+		}
+	}
 
-    public static String extractStr(JSONObject json, String firstLevel, String secondLevel) {
-        return extractStr(json, firstLevel, secondLevel, false);
-    }
+	public static Double extractDouble(JSONObject json, String fieldName) {
+		try {
+			return json.getDouble(fieldName);
+		} catch (JSONException e1) {
+			String str = extractStr(json, fieldName);
 
-    public static String asString(JSONObject json) {
-        try {
-            return json.toString(4);
-        } catch (JSONException e) {
-            e.printStackTrace();
+			if (str == null) {
+				DebugHelper.jsonFieldParseError(fieldName, json);
 
-            return null;
-        }
-    }
+				return null;
+			}
 
-    public static String extractStr(JSONObject json, String firstLevel, String secondLevel, Boolean silent) {
-        try {
-            return secondLevel == null
-                    ? json.get(firstLevel).toString()
-                    : json.getJSONObject(firstLevel).get(secondLevel).toString();
-        } catch (JSONException e) {
-            if (!silent) {
-                String path = firstLevel + (secondLevel == null ? "" : "=>" + secondLevel);
-                DebugHelper.jsonFieldParseError(path, json);
-            }
+			str = str.replace(',', '.');
+			NumberFormat format = NumberFormat.getInstance(Locale.US);
 
-            return null;
-        }
-    }
+			try {
+				return format.parse(str).doubleValue();
+			} catch (ParseException e2) {
+				DebugHelper.jsonFieldParseError(fieldName, json);
 
-    public static Integer extractInt(JSONObject json, String fieldName) {
-        return extractInt(json, fieldName, false);
-    }
+				return null;
+			}
+		}
+	}
 
-    public static Integer extractInt(JSONObject json, String fieldName, boolean silent) {
-        try {
-            return json.getInt(fieldName);
-        } catch (JSONException e1) {
-            String str = extractStr(json, fieldName, silent);
+	public static Integer extractInt(JSONObject json, String fieldName) {
+		return extractInt(json, fieldName, false);
+	}
 
-            if (str == null) {
-                if (!silent) {
-                    DebugHelper.jsonFieldParseError(fieldName, json);
-                }
+	public static Integer extractInt(JSONObject json, String fieldName, boolean silent) {
+		try {
+			return json.getInt(fieldName);
+		} catch (JSONException e1) {
+			String str = extractStr(json, fieldName, silent);
 
-                return null;
-            }
+			if (str == null) {
+				if (!silent) {
+					DebugHelper.jsonFieldParseError(fieldName, json);
+				}
 
-            try {
-                return Integer.parseInt(str);
-            } catch (NumberFormatException e2) {
-                DebugHelper.jsonFieldParseError(fieldName, json);
+				return null;
+			}
 
-                return null;
-            }
-        }
-    }
+			try {
+				return Integer.parseInt(str);
+			} catch (NumberFormatException e2) {
+				DebugHelper.jsonFieldParseError(fieldName, json);
 
-    public static Double extractDouble(JSONObject json, String fieldName) {
-        try {
-            return json.getDouble(fieldName);
-        } catch (JSONException e1) {
-            String str = extractStr(json, fieldName);
+				return null;
+			}
+		}
+	}
 
-            if (str == null) {
-                DebugHelper.jsonFieldParseError(fieldName, json);
+	public static String extractStr(JSONObject json, String fieldName) {
+		return extractStr(json, fieldName, null, false);
+	}
 
-                return null;
-            }
+	public static String extractStr(JSONObject json, String fieldName, Boolean silent) {
+		return extractStr(json, fieldName, null, silent);
+	}
 
-            str = str.replace(',', '.');
-            NumberFormat format = NumberFormat.getInstance(Locale.US);
+	public static String extractStr(JSONObject json, String firstLevel, String secondLevel) {
+		return extractStr(json, firstLevel, secondLevel, false);
+	}
 
-            try {
-                return format.parse(str).doubleValue();
-            } catch (ParseException e2) {
-                DebugHelper.jsonFieldParseError(fieldName, json);
+	public static String extractStr(JSONObject json, String firstLevel, String secondLevel, Boolean silent) {
+		try {
+			return secondLevel == null ? json.get(firstLevel).toString() : json.getJSONObject(firstLevel).get(secondLevel).toString();
+		} catch (JSONException e) {
+			if (!silent) {
+				String path = firstLevel + (secondLevel == null ? "" : "=>" + secondLevel);
+				DebugHelper.jsonFieldParseError(path, json);
+			}
 
-                return null;
-            }
-        }
-    }
+			return null;
+		}
+	}
 }

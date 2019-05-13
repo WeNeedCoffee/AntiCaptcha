@@ -1,89 +1,86 @@
 package com.anti_captcha.Api;
 
-import com.anti_captcha.AnticaptchaBase;
-import com.anti_captcha.ApiResponse.TaskResultResponse;
-import com.anti_captcha.Helper.DebugHelper;
-import com.anti_captcha.IAnticaptchaTaskProtocol;
-
+import java.net.URL;
 import org.json.JSONException;
 import org.json.JSONObject;
-
-import java.net.URL;
+import com.anti_captcha.AnticaptchaBase;
+import com.anti_captcha.IAnticaptchaTaskProtocol;
+import com.anti_captcha.ApiResponse.TaskResultResponse;
+import com.anti_captcha.Helper.DebugHelper;
 
 public class FunCaptcha extends AnticaptchaBase implements IAnticaptchaTaskProtocol {
-    private String proxyLogin;
-    private String proxyPassword;
-    private Integer proxyPort;
-    private ProxyTypeOption proxyType;
-    private String userAgent;
-    private String proxyAddress;
-    private URL websiteUrl;
-    private String websitePublicKey;
+	private String proxyLogin;
+	private String proxyPassword;
+	private Integer proxyPort;
+	private ProxyTypeOption proxyType;
+	private String userAgent;
+	private String proxyAddress;
+	private URL websiteUrl;
+	private String websitePublicKey;
 
-    public void setProxyLogin(String proxyLogin) {
-        this.proxyLogin = proxyLogin;
-    }
+	@Override
+	public JSONObject getPostData() {
+		JSONObject postData = new JSONObject();
 
-    public void setProxyPassword(String proxyPassword) {
-        this.proxyPassword = proxyPassword;
-    }
+		if (proxyType == null || proxyPort == null || proxyPort < 1 || proxyPort > 65535 || proxyAddress == null || proxyAddress.length() == 0) {
+			DebugHelper.out("Proxy data is incorrect!", DebugHelper.Type.ERROR);
 
-    public void setProxyPort(Integer proxyPort) {
-        this.proxyPort = proxyPort;
-    }
+			return null;
+		}
 
-    public void setProxyType(ProxyTypeOption proxyType) {
-        this.proxyType = proxyType;
-    }
+		try {
+			postData.put("type", "FunCaptchaTask");
+			postData.put("websiteURL", websiteUrl);
+			postData.put("websitePublicKey", websitePublicKey);
+			postData.put("proxyType", proxyType.toString().toLowerCase());
+			postData.put("proxyAddress", proxyAddress);
+			postData.put("proxyPort", proxyPort);
+			postData.put("proxyLogin", proxyLogin);
+			postData.put("proxyPassword", proxyPassword);
+			postData.put("userAgent", userAgent);
+		} catch (JSONException e) {
+			DebugHelper.out("JSON compilation error: " + e.getMessage(), DebugHelper.Type.ERROR);
 
-    public void setUserAgent(String userAgent) {
-        this.userAgent = userAgent;
-    }
+			return null;
+		}
 
-    public void setProxyAddress(String proxyAddress) {
-        this.proxyAddress = proxyAddress;
-    }
+		return postData;
+	}
 
-    @Override
-    public JSONObject getPostData() {
-        JSONObject postData = new JSONObject();
+	@Override
+	public TaskResultResponse.SolutionData getTaskSolution() {
+		return taskInfo.getSolution();
+	}
 
-        if (proxyType == null || proxyPort == null || proxyPort < 1 || proxyPort > 65535
-                || proxyAddress == null || proxyAddress.length() == 0) {
-            DebugHelper.out("Proxy data is incorrect!", DebugHelper.Type.ERROR);
+	public void setProxyAddress(String proxyAddress) {
+		this.proxyAddress = proxyAddress;
+	}
 
-            return null;
-        }
+	public void setProxyLogin(String proxyLogin) {
+		this.proxyLogin = proxyLogin;
+	}
 
-        try {
-            postData.put("type", "FunCaptchaTask");
-            postData.put("websiteURL", websiteUrl);
-            postData.put("websitePublicKey", websitePublicKey);
-            postData.put("proxyType", proxyType.toString().toLowerCase());
-            postData.put("proxyAddress", proxyAddress);
-            postData.put("proxyPort", proxyPort);
-            postData.put("proxyLogin", proxyLogin);
-            postData.put("proxyPassword", proxyPassword);
-            postData.put("userAgent", userAgent);
-        } catch (JSONException e) {
-            DebugHelper.out("JSON compilation error: " + e.getMessage(), DebugHelper.Type.ERROR);
+	public void setProxyPassword(String proxyPassword) {
+		this.proxyPassword = proxyPassword;
+	}
 
-            return null;
-        }
+	public void setProxyPort(Integer proxyPort) {
+		this.proxyPort = proxyPort;
+	}
 
-        return postData;
-    }
+	public void setProxyType(ProxyTypeOption proxyType) {
+		this.proxyType = proxyType;
+	}
 
-    @Override
-    public TaskResultResponse.SolutionData getTaskSolution() {
-        return taskInfo.getSolution();
-    }
+	public void setUserAgent(String userAgent) {
+		this.userAgent = userAgent;
+	}
 
-    public void setWebsiteUrl(URL websiteUrl) {
-        this.websiteUrl = websiteUrl;
-    }
+	public void setWebsitePublicKey(String websitePublicKey) {
+		this.websitePublicKey = websitePublicKey;
+	}
 
-    public void setWebsitePublicKey(String websitePublicKey) {
-        this.websitePublicKey = websitePublicKey;
-    }
+	public void setWebsiteUrl(URL websiteUrl) {
+		this.websiteUrl = websiteUrl;
+	}
 }

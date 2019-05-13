@@ -1,11 +1,10 @@
 package com.anti_captcha;
 
+import org.json.JSONObject;
 import com.anti_captcha.ApiResponse.TaskResultResponse;
 
-import org.json.JSONObject;
-
 public interface IAnticaptchaTaskProtocol {
-    JSONObject getPostData();
+	JSONObject getPostData();
 
-    TaskResultResponse.SolutionData getTaskSolution();
+	TaskResultResponse.SolutionData getTaskSolution();
 }

@@ -1,10 +1,8 @@
 package com.anti_captcha;
 
 import java.util.concurrent.TimeUnit;
-
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import com.anti_captcha.ApiResponse.BalanceResponse;
 import com.anti_captcha.ApiResponse.CreateTaskResponse;
 import com.anti_captcha.ApiResponse.TaskResultResponse;
@@ -15,242 +13,231 @@ import com.anti_captcha.Helper.StringHelper;
 import com.anti_captcha.Http.HttpRequest;
 
 public abstract class AnticaptchaBase {
-    protected TaskResultResponse taskInfo;
-    private String host = "api.anti-captcha.com";
-    private SchemeType scheme = SchemeType.HTTPS;
-    private String errorMessage;
-    private Integer taskId;
-    private String clientKey;
+	private enum ApiMethod {
+		CREATE_TASK, GET_TASK_RESULT, GET_BALANCE
+	}
 
-    public enum ProxyTypeOption {
-        HTTP,
-        SOCKS4,
-        SOCKS5
-    }
+	public enum ProxyTypeOption {
+		HTTP, SOCKS4, SOCKS5
+	}
 
-    private JSONObject jsonPostRequest(ApiMethod methodName, JSONObject jsonPostData) {
+	private enum SchemeType {
+		HTTP, HTTPS
+	}
 
-        String url = scheme + "://" + host + "/" + StringHelper.toCamelCase(methodName.toString());
-        HttpRequest request = new HttpRequest(url);
-        request.setRawPost(JsonHelper.asString(jsonPostData));
-        request.addHeader("Content-Type", "application/json; charset=utf-8");
-        request.addHeader("Accept", "application/json");
-        request.setTimeout(30_000);
+	protected TaskResultResponse taskInfo;
+	private String host = "api.anti-captcha.com";
+	private SchemeType scheme = SchemeType.HTTPS;
 
-        String rawJson;
+	private String errorMessage;
 
-        try {
-            rawJson = HttpHelper.download(request).getBody();
-        } catch (Exception e) {
-            errorMessage = e.getMessage();
-            DebugHelper.out("HTTP problem: " + e.getMessage(), DebugHelper.Type.ERROR);
+	private Integer taskId;
 
-            return null;
-        }
+	private String clientKey;
 
-        try {
-            return new JSONObject(rawJson);
-        } catch (Exception e) {
-            errorMessage = e.getMessage();
-            DebugHelper.out("JSON parse problem: " + e.getMessage(), DebugHelper.Type.ERROR);
+	public Boolean createTask() {
+		JSONObject taskJson = getPostData();
 
-            return null;
-        }
-    }
+		if (taskJson == null) {
+			DebugHelper.out("JSON error", DebugHelper.Type.ERROR);
 
-    public abstract JSONObject getPostData();
+			return false;
+		}
 
-    public Boolean createTask() {
-        JSONObject taskJson = getPostData();
+		JSONObject jsonPostData = new JSONObject();
 
-        if (taskJson == null) {
-            DebugHelper.out("JSON error", DebugHelper.Type.ERROR);
+		try {
+			jsonPostData.put("clientKey", clientKey);
+			jsonPostData.put("task", taskJson);
+		} catch (JSONException e) {
+			errorMessage = e.getMessage();
+			DebugHelper.out("JSON compilation error: " + e.getMessage(), DebugHelper.Type.ERROR);
 
-            return false;
-        }
+			return false;
+		}
 
-        JSONObject jsonPostData = new JSONObject();
+		DebugHelper.out("Connecting to " + host, DebugHelper.Type.INFO);
+		JSONObject postResult = jsonPostRequest(ApiMethod.CREATE_TASK, jsonPostData);
 
-        try {
-            jsonPostData.put("clientKey", clientKey);
-            jsonPostData.put("task", taskJson);
-        } catch (JSONException e) {
-            errorMessage = e.getMessage();
-            DebugHelper.out("JSON compilation error: " + e.getMessage(), DebugHelper.Type.ERROR);
+		if (postResult == null) {
+			DebugHelper.out("API error", DebugHelper.Type.ERROR);
 
-            return false;
-        }
+			return false;
+		}
 
-        DebugHelper.out("Connecting to " + host, DebugHelper.Type.INFO);
-        JSONObject postResult = jsonPostRequest(ApiMethod.CREATE_TASK, jsonPostData);
+		CreateTaskResponse response = new CreateTaskResponse(postResult);
 
-        if (postResult == null) {
-            DebugHelper.out("API error", DebugHelper.Type.ERROR);
+		if (response.getErrorId() == null || !response.getErrorId().equals(0)) {
+			errorMessage = response.getErrorDescription();
+			String errorId = response.getErrorId() == null ? "" : response.getErrorId().toString();
 
-            return false;
-        }
+			DebugHelper.out("API error " + errorId + ": " + response.getErrorDescription(), DebugHelper.Type.ERROR);
 
-        CreateTaskResponse response = new CreateTaskResponse(postResult);
+			return false;
+		}
 
-        if (response.getErrorId() == null || !response.getErrorId().equals(0)) {
-            errorMessage = response.getErrorDescription();
-            String errorId = response.getErrorId() == null ? "" : response.getErrorId().toString();
+		if (response.getTaskId() == null) {
+			DebugHelper.jsonFieldParseError("taskId", postResult);
 
-            DebugHelper.out(
-                    "API error " + errorId + ": " + response.getErrorDescription(),
-                    DebugHelper.Type.ERROR
-            );
+			return false;
+		}
 
-            return false;
-        }
+		taskId = response.getTaskId();
+		DebugHelper.out("Task ID: " + taskId, DebugHelper.Type.SUCCESS);
 
-        if (response.getTaskId() == null) {
-            DebugHelper.jsonFieldParseError("taskId", postResult);
+		return true;
+	}
 
-            return false;
-        }
+	public Double getBalance() {
+		JSONObject jsonPostData = new JSONObject();
 
-        taskId = response.getTaskId();
-        DebugHelper.out("Task ID: " + taskId, DebugHelper.Type.SUCCESS);
+		try {
+			jsonPostData.put("clientKey", clientKey);
+		} catch (JSONException e) {
+			errorMessage = e.getMessage();
+			DebugHelper.out("JSON compilation error: " + e.getMessage(), DebugHelper.Type.ERROR);
 
-        return true;
-    }
+			return null;
+		}
 
-    public Double getBalance() {
-        JSONObject jsonPostData = new JSONObject();
+		JSONObject postResult = jsonPostRequest(ApiMethod.GET_BALANCE, jsonPostData);
 
-        try {
-            jsonPostData.put("clientKey", clientKey);
-        } catch (JSONException e) {
-            errorMessage = e.getMessage();
-            DebugHelper.out("JSON compilation error: " + e.getMessage(), DebugHelper.Type.ERROR);
+		if (postResult == null) {
+			DebugHelper.out("API error", DebugHelper.Type.ERROR);
 
-            return null;
-        }
+			return null;
+		}
 
-        JSONObject postResult = jsonPostRequest(ApiMethod.GET_BALANCE, jsonPostData);
+		BalanceResponse balanceResponse = new BalanceResponse(postResult);
 
-        if (postResult == null) {
-            DebugHelper.out("API error", DebugHelper.Type.ERROR);
+		if (balanceResponse.getErrorId() == null || !balanceResponse.getErrorId().equals(0)) {
+			errorMessage = balanceResponse.getErrorDescription();
+			String errorId = balanceResponse.getErrorId() == null ? "" : balanceResponse.getErrorId().toString();
 
-            return null;
-        }
+			DebugHelper.out("API error " + errorId + ": " + balanceResponse.getErrorDescription(), DebugHelper.Type.ERROR);
 
-        BalanceResponse balanceResponse = new BalanceResponse(postResult);
+			return null;
+		}
 
-        if (balanceResponse.getErrorId() == null || !balanceResponse.getErrorId().equals(0)) {
-            errorMessage = balanceResponse.getErrorDescription();
-            String errorId = balanceResponse.getErrorId() == null ? "" : balanceResponse.getErrorId().toString();
+		return balanceResponse.getBalance();
+	}
 
-            DebugHelper.out(
-                    "API error " + errorId + ": " + balanceResponse.getErrorDescription(),
-                    DebugHelper.Type.ERROR
-            );
+	public String getErrorMessage() {
+		return errorMessage == null ? "no error message" : errorMessage;
+	}
 
-            return null;
-        }
+	public abstract JSONObject getPostData();
 
-        return balanceResponse.getBalance();
-    }
+	private JSONObject jsonPostRequest(ApiMethod methodName, JSONObject jsonPostData) {
 
-    public Boolean waitForResult(Integer maxSeconds, Integer currentSecond) throws InterruptedException {
-        if (currentSecond >= maxSeconds) {
-            DebugHelper.out("Time's out.", DebugHelper.Type.ERROR);
+		String url = scheme + "://" + host + "/" + StringHelper.toCamelCase(methodName.toString());
+		HttpRequest request = new HttpRequest(url);
+		request.setRawPost(JsonHelper.asString(jsonPostData));
+		request.addHeader("Content-Type", "application/json; charset=utf-8");
+		request.addHeader("Accept", "application/json");
+		request.setTimeout(30_000);
 
-            return false;
-        }
+		String rawJson;
 
-        if (currentSecond.equals(0)) {
-            DebugHelper.out("Waiting for 3 seconds...", DebugHelper.Type.INFO);
-            TimeUnit.SECONDS.sleep(3);
-        } else {
-            TimeUnit.SECONDS.sleep(1);
-        }
+		try {
+			rawJson = HttpHelper.download(request).getBody();
+		} catch (Exception e) {
+			errorMessage = e.getMessage();
+			DebugHelper.out("HTTP problem: " + e.getMessage(), DebugHelper.Type.ERROR);
 
-        DebugHelper.out("Requesting the task status", DebugHelper.Type.INFO);
-        JSONObject jsonPostData = new JSONObject();
+			return null;
+		}
 
-        try {
-            jsonPostData.put("clientKey", clientKey);
-            jsonPostData.put("taskId", taskId);
-        } catch (JSONException e) {
-            errorMessage = e.getMessage();
-            DebugHelper.out("JSON compilation error: " + e.getMessage(), DebugHelper.Type.ERROR);
+		try {
+			return new JSONObject(rawJson);
+		} catch (Exception e) {
+			errorMessage = e.getMessage();
+			DebugHelper.out("JSON parse problem: " + e.getMessage(), DebugHelper.Type.ERROR);
 
-            return false;
-        }
+			return null;
+		}
+	}
 
-        JSONObject postResult = jsonPostRequest(ApiMethod.GET_TASK_RESULT, jsonPostData);
+	public void setClientKey(String clientKey_) {
+		clientKey = clientKey_;
+	}
 
-        if (postResult == null) {
-            DebugHelper.out("API error", DebugHelper.Type.ERROR);
+	public Boolean waitForResult() throws InterruptedException {
+		return waitForResult(900, 0);
+	}
 
-            return false;
-        }
+	public Boolean waitForResult(Integer maxSeconds) throws InterruptedException {
+		return waitForResult(maxSeconds, 0);
+	}
 
-        taskInfo = new TaskResultResponse(postResult);
+	public Boolean waitForResult(Integer maxSeconds, Integer currentSecond) throws InterruptedException {
+		if (currentSecond >= maxSeconds) {
+			DebugHelper.out("Time's out.", DebugHelper.Type.ERROR);
 
-        if (taskInfo.getErrorId() == null || !taskInfo.getErrorId().equals(0)) {
-            errorMessage = taskInfo.getErrorDescription();
-            String errorId = taskInfo.getErrorId() == null ? "" : taskInfo.getErrorId().toString();
+			return false;
+		}
 
-            DebugHelper.out(
-                    "API error " + errorId + ": " + errorMessage,
-                    DebugHelper.Type.ERROR
-            );
+		if (currentSecond.equals(0)) {
+			DebugHelper.out("Waiting for 3 seconds...", DebugHelper.Type.INFO);
+			TimeUnit.SECONDS.sleep(3);
+		} else {
+			TimeUnit.SECONDS.sleep(1);
+		}
 
-            return false;
-        }
+		DebugHelper.out("Requesting the task status", DebugHelper.Type.INFO);
+		JSONObject jsonPostData = new JSONObject();
 
-        TaskResultResponse.StatusType status = taskInfo.getStatus();
-        TaskResultResponse.SolutionData solution = taskInfo.getSolution();
+		try {
+			jsonPostData.put("clientKey", clientKey);
+			jsonPostData.put("taskId", taskId);
+		} catch (JSONException e) {
+			errorMessage = e.getMessage();
+			DebugHelper.out("JSON compilation error: " + e.getMessage(), DebugHelper.Type.ERROR);
 
-        if (status != null && status.equals(TaskResultResponse.StatusType.PROCESSING)) {
-            DebugHelper.out("The task is still processing...", DebugHelper.Type.INFO);
+			return false;
+		}
 
-            return waitForResult(maxSeconds, currentSecond + 1);
-        } else if (status != null && status.equals(TaskResultResponse.StatusType.READY)) {
-            if (solution.getGRecaptchaResponse() == null && solution.getText() == null && solution.getAnswers() == null && solution.getToken() == null) {
-                DebugHelper.out("Got no 'solution' field from API", DebugHelper.Type.ERROR);
+		JSONObject postResult = jsonPostRequest(ApiMethod.GET_TASK_RESULT, jsonPostData);
 
-                return false;
-            }
+		if (postResult == null) {
+			DebugHelper.out("API error", DebugHelper.Type.ERROR);
 
-            DebugHelper.out("The task is complete!", DebugHelper.Type.SUCCESS);
+			return false;
+		}
 
-            return true;
-        }
+		taskInfo = new TaskResultResponse(postResult);
 
-        errorMessage = "An unknown API status, please update your software";
-        DebugHelper.out(errorMessage, DebugHelper.Type.ERROR);
+		if (taskInfo.getErrorId() == null || !taskInfo.getErrorId().equals(0)) {
+			errorMessage = taskInfo.getErrorDescription();
+			String errorId = taskInfo.getErrorId() == null ? "" : taskInfo.getErrorId().toString();
 
-        return false;
-    }
+			DebugHelper.out("API error " + errorId + ": " + errorMessage, DebugHelper.Type.ERROR);
 
-    public Boolean waitForResult() throws InterruptedException {
-        return waitForResult(900, 0);
-    }
+			return false;
+		}
 
-    public Boolean waitForResult(Integer maxSeconds) throws InterruptedException {
-        return waitForResult(maxSeconds, 0);
-    }
+		TaskResultResponse.StatusType status = taskInfo.getStatus();
+		TaskResultResponse.SolutionData solution = taskInfo.getSolution();
 
-    public void setClientKey(String clientKey_) {
-        clientKey = clientKey_;
-    }
+		if (status != null && status.equals(TaskResultResponse.StatusType.PROCESSING)) {
+			DebugHelper.out("The task is still processing...", DebugHelper.Type.INFO);
 
-    public String getErrorMessage() {
-        return errorMessage == null ? "no error message" : errorMessage;
-    }
+			return waitForResult(maxSeconds, currentSecond + 1);
+		} else if (status != null && status.equals(TaskResultResponse.StatusType.READY)) {
+			if (solution.getGRecaptchaResponse() == null && solution.getText() == null && solution.getAnswers() == null && solution.getToken() == null) {
+				DebugHelper.out("Got no 'solution' field from API", DebugHelper.Type.ERROR);
 
-    private enum SchemeType {
-        HTTP,
-        HTTPS
-    }
+				return false;
+			}
 
-    private enum ApiMethod {
-        CREATE_TASK,
-        GET_TASK_RESULT,
-        GET_BALANCE
-    }
+			DebugHelper.out("The task is complete!", DebugHelper.Type.SUCCESS);
+
+			return true;
+		}
+
+		errorMessage = "An unknown API status, please update your software";
+		DebugHelper.out(errorMessage, DebugHelper.Type.ERROR);
+
+		return false;
+	}
 }

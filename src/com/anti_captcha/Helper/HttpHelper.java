@@ -1,8 +1,19 @@
 package com.anti_captcha.Helper;
 
-import com.anti_captcha.Http.HttpRequest;
-import com.anti_captcha.Http.HttpResponse;
-
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.StringWriter;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Map;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import org.apache.http.HttpHost;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
@@ -18,193 +29,177 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
 import org.apache.http.impl.cookie.BasicClientCookie;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.StringWriter;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.util.Map;
-
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
+import com.anti_captcha.Http.HttpRequest;
+import com.anti_captcha.Http.HttpResponse;
 
 public class HttpHelper {
 
-    public static HttpResponse download(HttpRequest request) throws Exception {
+	// Костыль для получения HttpClient'а для HTTPS
+	private enum HttpsClientBuilderGiver {
+		INSTANCE;
 
-        BasicCookieStore cookieStore = new BasicCookieStore();
+		private class HttpsTrustManager implements X509TrustManager {
 
-        if (request.getCookies() != null) {
-            for (Map.Entry<String, String> cookieEntry : request.getCookies().entrySet()) {
+			@Override
+			public void checkClientTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+			}
 
-                BasicClientCookie cookie = new BasicClientCookie(cookieEntry.getKey(), cookieEntry.getValue());
-                cookie.setDomain(getCookieDomain(request.getUrl()));
+			@Override
+			public void checkServerTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
+			}
 
-                cookieStore.addCookie(cookie);
-            }
-        }
+			@Override
+			public X509Certificate[] getAcceptedIssuers() {
+				return new X509Certificate[] {};
+			}
 
-        HttpClientBuilder httpClientBuilder;
+		}
 
-        // if "https:" and don't need to check certificates
-        if (!request.isValidateTLSCertificates() && request.getUrl().toLowerCase().charAt(4) == 's') {
-            httpClientBuilder = HttpsClientBuilderGiver.INSTANCE.getHttpsClientBuilder();
-        } else {
-            httpClientBuilder = HttpClientBuilder.create();
-        }
+		/**
+		 * Apache HttpClient which will work well with any (even invalid and
+		 * expired) HTTPS certificate.
+		 */
+		public HttpClientBuilder getHttpsClientBuilder() throws NoSuchAlgorithmException, KeyManagementException {
 
-        if (request.getCookies() != null) {
-            httpClientBuilder.setDefaultCookieStore(cookieStore);
-        }
+			SSLContext sslcontext = SSLContext.getInstance("TLS"); // SSL and
+																	 // TLS -
+																	 // both
+																	 // work
+			// SSLContext sslcontext = SSLContextexts.custom().useSSL().build();
+			// // works, too
 
-        if (request.getProxy() != null) {
+			sslcontext.init(new KeyManager[0], new TrustManager[] { new HttpsTrustManager() }, new SecureRandom());
+			// sslcontext.init(null, new X509TrustManager[]{new
+			// HttpsTrustManager()}, new SecureRandom()); // works, too
 
-            httpClientBuilder.setRoutePlanner(new DefaultProxyRoutePlanner(new HttpHost(
-                    request.getProxy().get("host"),
-                    Integer.parseInt(request.getProxy().get("port"))
-            )));
-        }
+			SSLContext.setDefault(sslcontext);
 
-        HttpClient httpClient;
+			return HttpClients.custom().setSSLSocketFactory(new SSLConnectionSocketFactory(sslcontext, new NoopHostnameVerifier()));
+		}
+	}
 
-        if (request.isFollowRedirects()) {
-            httpClient = httpClientBuilder.build();
-        } else {
-            httpClient = httpClientBuilder.disableRedirectHandling().build();
-        }
+	private enum InputOutput {
+		INSTANCE;
 
-        org.apache.http.HttpResponse response;
-        HttpRequestBase apacheHttpRequest;
+		/**
+		 * The default buffer size to use.
+		 */
+		private final int DEFAULT_BUFFER_SIZE = 1024 * 4;
 
-        if (request.getRawPost() == null) {
-            apacheHttpRequest = new HttpGet(request.getUrl());
-        } else {
-            apacheHttpRequest = new HttpPost(request.getUrl());
-            ((HttpPost) apacheHttpRequest).setEntity(new StringEntity(request.getRawPost(), "UTF-8"));
-        }
+		/**
+		 * Get the contents of an <code>InputStream</code> as a String using the
+		 * specified character encoding.
+		 * <p>
+		 * Character encoding names can be found at
+		 * <a href="http://www.iana.org/assignments/character-sets">IANA</a>.
+		 * <p>
+		 * This method buffers the input internally, so there is no need to use
+		 * a <code>BufferedInputStream</code>.
+		 *
+		 * @param input    the <code>InputStream</code> to read from
+		 * @param encoding the encoding to use, null means platform default
+		 * @param bytesMax the amount of bytes you want to get, when exceeded,
+		 *                 download will stop
+		 * @return the requested String
+		 * @throws NullPointerException if the input is null
+		 * @throws IOException          if an I/O jsonFieldParseError occurs
+		 */
+		public String toString(InputStream input, String encoding, Integer bytesMax) throws IOException {
 
-        HttpClientContext context = HttpClientContext.create();
+			StringWriter output = new StringWriter();
+			InputStreamReader in = new InputStreamReader(input, encoding);
 
-        apacheHttpRequest.setConfig(RequestConfig.custom()
-                .setConnectionRequestTimeout(request.getTimeout())
-                .setConnectTimeout(request.getTimeout())
-                .setSocketTimeout(request.getTimeout())
-                .build());
+			char[] buffer = new char[DEFAULT_BUFFER_SIZE];
+			long count = 0;
+			int n = 0;
 
-        for (Map.Entry<String, String> header : request.getHeaders().entrySet()) {
-            apacheHttpRequest.addHeader(header.getKey(), header.getValue());
-        }
+			while (-1 != (n = in.read(buffer))) {
 
-        response = httpClient.execute(apacheHttpRequest, context);
-        String charset = "utf8";
+				output.write(buffer, 0, n);
+				count += n;
 
-        if (response.getHeaders("Content-Type").length != 0) {
-            String[] charsetSplitted = response.getHeaders("Content-Type")[0].getValue().split("; charset=");
+				if (bytesMax > 0 && count >= bytesMax) {
+					break;
+				}
+			}
 
-            if (charsetSplitted.length == 2) {
-                charset = charsetSplitted[1];
-            }
-        }
+			return output.toString();
+		}
+	}
 
-        return new HttpResponse(
-                InputOutput.INSTANCE.toString(response.getEntity().getContent(), charset, request.getMaxBodySize()),
-                response,
-                context
-        );
-    }
+	public static HttpResponse download(HttpRequest request) throws Exception {
 
-    private static String getCookieDomain(String url) {
-        return "." + url.split("://")[1].split("/")[0];
-    }
+		BasicCookieStore cookieStore = new BasicCookieStore();
 
-    // Костыль для получения HttpClient'а для HTTPS
-    private enum HttpsClientBuilderGiver {
-        INSTANCE;
+		if (request.getCookies() != null) {
+			for (Map.Entry<String, String> cookieEntry : request.getCookies().entrySet()) {
 
-        /**
-         * Apache HttpClient which will work well with any (even invalid and expired) HTTPS
-         * certificate.
-         */
-        public HttpClientBuilder getHttpsClientBuilder() throws NoSuchAlgorithmException, KeyManagementException {
+				BasicClientCookie cookie = new BasicClientCookie(cookieEntry.getKey(), cookieEntry.getValue());
+				cookie.setDomain(getCookieDomain(request.getUrl()));
 
-            SSLContext sslcontext = SSLContext.getInstance("TLS"); // SSL and TLS - both work
-//            SSLContext sslcontext = SSLContextexts.custom().useSSL().build(); // works, too
+				cookieStore.addCookie(cookie);
+			}
+		}
 
-            sslcontext.init(new KeyManager[0], new TrustManager[]{new HttpsTrustManager()}, new SecureRandom());
-//            sslcontext.init(null, new X509TrustManager[]{new HttpsTrustManager()}, new SecureRandom()); // works, too
+		HttpClientBuilder httpClientBuilder;
 
-            SSLContext.setDefault(sslcontext);
+		// if "https:" and don't need to check certificates
+		if (!request.isValidateTLSCertificates() && request.getUrl().toLowerCase().charAt(4) == 's') {
+			httpClientBuilder = HttpsClientBuilderGiver.INSTANCE.getHttpsClientBuilder();
+		} else {
+			httpClientBuilder = HttpClientBuilder.create();
+		}
 
-            return HttpClients.custom()
-                    .setSSLSocketFactory(new SSLConnectionSocketFactory(sslcontext, new NoopHostnameVerifier()));
-        }
+		if (request.getCookies() != null) {
+			httpClientBuilder.setDefaultCookieStore(cookieStore);
+		}
 
-        private class HttpsTrustManager implements X509TrustManager {
+		if (request.getProxy() != null) {
 
-            @Override
-            public void checkClientTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
-            }
+			httpClientBuilder.setRoutePlanner(new DefaultProxyRoutePlanner(new HttpHost(request.getProxy().get("host"), Integer.parseInt(request.getProxy().get("port")))));
+		}
 
-            @Override
-            public void checkServerTrusted(X509Certificate[] arg0, String arg1) throws CertificateException {
-            }
+		HttpClient httpClient;
 
-            @Override
-            public X509Certificate[] getAcceptedIssuers() {
-                return new X509Certificate[]{};
-            }
+		if (request.isFollowRedirects()) {
+			httpClient = httpClientBuilder.build();
+		} else {
+			httpClient = httpClientBuilder.disableRedirectHandling().build();
+		}
 
-        }
-    }
+		org.apache.http.HttpResponse response;
+		HttpRequestBase apacheHttpRequest;
 
-    private enum InputOutput {
-        INSTANCE;
+		if (request.getRawPost() == null) {
+			apacheHttpRequest = new HttpGet(request.getUrl());
+		} else {
+			apacheHttpRequest = new HttpPost(request.getUrl());
+			((HttpPost) apacheHttpRequest).setEntity(new StringEntity(request.getRawPost(), "UTF-8"));
+		}
 
-        /**
-         * The default buffer size to use.
-         */
-        private final int DEFAULT_BUFFER_SIZE = 1024 * 4;
+		HttpClientContext context = HttpClientContext.create();
 
-        /**
-         * Get the contents of an <code>InputStream</code> as a String using the specified character
-         * encoding. <p> Character encoding names can be found at <a href="http://www.iana.org/assignments/character-sets">IANA</a>.
-         * <p> This method buffers the input internally, so there is no need to use a
-         * <code>BufferedInputStream</code>.
-         *
-         * @param input    the <code>InputStream</code> to read from
-         * @param encoding the encoding to use, null means platform default
-         * @param bytesMax the amount of bytes you want to get, when exceeded, download will stop
-         * @return the requested String
-         * @throws NullPointerException if the input is null
-         * @throws IOException          if an I/O jsonFieldParseError occurs
-         */
-        public String toString(InputStream input, String encoding, Integer bytesMax) throws IOException {
+		apacheHttpRequest.setConfig(RequestConfig.custom().setConnectionRequestTimeout(request.getTimeout()).setConnectTimeout(request.getTimeout()).setSocketTimeout(request.getTimeout()).build());
 
-            StringWriter output = new StringWriter();
-            InputStreamReader in = new InputStreamReader(input, encoding);
+		for (Map.Entry<String, String> header : request.getHeaders().entrySet()) {
+			apacheHttpRequest.addHeader(header.getKey(), header.getValue());
+		}
 
-            char[] buffer = new char[DEFAULT_BUFFER_SIZE];
-            long count = 0;
-            int n = 0;
+		response = httpClient.execute(apacheHttpRequest, context);
+		String charset = "utf8";
 
-            while (-1 != (n = in.read(buffer))) {
+		if (response.getHeaders("Content-Type").length != 0) {
+			String[] charsetSplitted = response.getHeaders("Content-Type")[0].getValue().split("; charset=");
 
-                output.write(buffer, 0, n);
-                count += n;
+			if (charsetSplitted.length == 2) {
+				charset = charsetSplitted[1];
+			}
+		}
 
-                if (bytesMax > 0 && count >= bytesMax) {
-                    break;
-                }
-            }
+		return new HttpResponse(InputOutput.INSTANCE.toString(response.getEntity().getContent(), charset, request.getMaxBodySize()), response, context);
+	}
 
-            return output.toString();
-        }
-    }
+	private static String getCookieDomain(String url) {
+		return "." + url.split("://")[1].split("/")[0];
+	}
 }
