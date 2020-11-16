@@ -1,5 +1,4 @@
 *.userlibraries
 *.class
 *.html
-/.idea/
 /target/
